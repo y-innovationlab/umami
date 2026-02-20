@@ -1,6 +1,7 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { readReplicas } from '@prisma/extension-read-replicas';
 import debug from 'debug';
+import { Pool } from 'pg';
 import { PrismaClient } from '@/generated/prisma/client';
 import { DEFAULT_PAGE_SIZE, FILTER_COLUMNS, OPERATORS, SESSION_COLUMNS } from './constants';
 import { filtersObjectToArray } from './params';
@@ -299,13 +300,27 @@ function getSchema() {
   return connectionUrl.searchParams.get('schema');
 }
 
+function createPool(connectionString: string) {
+  const dbUrl = new URL(connectionString);
+
+  return new Pool({
+    host: dbUrl.hostname,
+    port: parseInt(dbUrl.port || '5432', 10),
+    user: decodeURIComponent(dbUrl.username),
+    password: decodeURIComponent(dbUrl.password),
+    database: dbUrl.pathname.slice(1),
+    ssl: { rejectUnauthorized: false },
+  });
+}
+
 function getClient() {
   const url = process.env.DATABASE_URL;
   const replicaUrl = process.env.DATABASE_REPLICA_URL;
   const logQuery = process.env.LOG_QUERY;
   const schema = getSchema();
 
-  const baseAdapter = new PrismaPg({ connectionString: url }, { schema });
+  const basePool = createPool(url);
+  const baseAdapter = new PrismaPg(basePool, { schema });
 
   const baseClient = new PrismaClient({
     adapter: baseAdapter,
@@ -323,7 +338,8 @@ function getClient() {
     return baseClient;
   }
 
-  const replicaAdapter = new PrismaPg({ connectionString: replicaUrl }, { schema });
+  const replicaPool = createPool(replicaUrl);
+  const replicaAdapter = new PrismaPg(replicaPool, { schema });
 
   const replicaClient = new PrismaClient({
     adapter: replicaAdapter,
