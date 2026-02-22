@@ -301,7 +301,9 @@ function getSchema() {
 }
 
 function createPool(connectionString: string) {
-  const dbUrl = new URL(connectionString);
+  // URL class only parses authority (user:pass@host:port) for standard schemes.
+  // postgresql:// is non-standard, so we replace it with http:// for parsing.
+  const dbUrl = new URL(connectionString.replace(/^postgres(ql)?:\/\//, 'http://'));
 
   return new Pool({
     host: dbUrl.hostname,
@@ -310,6 +312,7 @@ function createPool(connectionString: string) {
     password: decodeURIComponent(dbUrl.password),
     database: dbUrl.pathname.slice(1),
     ssl: { rejectUnauthorized: false },
+    max: 1,
   });
 }
 
